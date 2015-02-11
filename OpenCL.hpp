@@ -381,64 +381,8 @@ public:
 
 
 
-namespace impl 
-{
-	template<>
-	class Object<CommandQueue>: public ObjectBase<
-			cl_command_queue,
-			cl_command_queue_info,
-			clGetCommandQueueInfo,
-			CL_INVALID_COMMAND_QUEUE,
-			clRetainCommandQueue,
-			clReleaseCommandQueue>
-	{
-	public:
-		Object(const cl_command_queue& id):
-			ObjectBase<
-			cl_command_queue,
-			cl_command_queue_info,
-			clGetCommandQueueInfo,
-			CL_INVALID_COMMAND_QUEUE,
-			clRetainCommandQueue,
-			clReleaseCommandQueue>(id)
-		{}
-	};
-}
-class CommandQueue: public impl::Object<CommandQueue>
-{
-public:
 
-public:
-	CommandQueue(const Context& context,const Device& device,std::vector<cl_command_queue_properties> properties=std::vector<cl_command_queue_properties>()):
-		impl::Object< CommandQueue >(cl_command_queue())
-	{
-		int result;
-		properties.push_back(0);
 
-#ifdef CL2
-		id=clCreateCommandQueueWithProperties(context,device,&properties[0],&result);
-#else
-		cl_bitfield bf=0;
-		for(auto p: properties)
-			bf|=p;
-		id=clCreateCommandQueue(context,device,bf,&result);
-#endif
-		impl::check_result(result,CL_SUCCESS,"Error building command queue");
-	}
-	
-	void Flush()
-	{
-		cl_int result=clFlush(id);
-		impl::check_result(result,CL_SUCCESS,"Error flushing the command queue");
-	}
-	
-	void Finish()
-	{
-		cl_int result=clFinish(id);
-		impl::check_result(result,CL_SUCCESS,"Error finishing the command queue");
-	}
-
-};
 
 namespace impl 
 {
@@ -850,6 +794,206 @@ public:
 		impl::check_result(result,CL_SUCCESS,"Error with sampler");
 	}	
 };
+
+namespace impl 
+{
+	template<>
+	class Object<CommandQueue>: public ObjectBase<
+			cl_command_queue,
+			cl_command_queue_info,
+			clGetCommandQueueInfo,
+			CL_INVALID_COMMAND_QUEUE,
+			clRetainCommandQueue,
+			clReleaseCommandQueue>
+	{
+	public:
+		Object(const cl_command_queue& id):
+			ObjectBase<
+			cl_command_queue,
+			cl_command_queue_info,
+			clGetCommandQueueInfo,
+			CL_INVALID_COMMAND_QUEUE,
+			clRetainCommandQueue,
+			clReleaseCommandQueue>(id)
+		{}
+	};
+}
+
+class CommandQueue: public impl::Object<CommandQueue>
+{
+public:
+
+public:
+	CommandQueue(const Context& context,const Device& device,std::vector<cl_command_queue_properties> properties=std::vector<cl_command_queue_properties>()):
+		impl::Object< CommandQueue >(cl_command_queue())
+	{
+		int result;
+		properties.push_back(0);
+
+#ifdef CL2
+		id=clCreateCommandQueueWithProperties(context,device,&properties[0],&result);
+#else
+		cl_bitfield bf=0;
+		for(auto p: properties)
+			bf|=p;
+		id=clCreateCommandQueue(context,device,bf,&result);
+#endif
+		impl::check_result(result,CL_SUCCESS,"Error building command queue");
+	}
+	
+	void Flush()
+	{
+		cl_int result=clFlush(id);
+		impl::check_result(result,CL_SUCCESS,"Error flushing the command queue");
+	}
+	
+	void Finish()
+	{
+		cl_int result=clFinish(id);
+		impl::check_result(result,CL_SUCCESS,"Error finishing the command queue");
+	}
+
+	Event EnqueueReadBuffer(const Buffer& b,bool blocking_read,size_t offset,
+		size_t cb, void* ptr,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueReadBuffer(id,b.id,blocking_read,offset,cb,ptr,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Read buffer failed");
+		return e;
+	}
+	Event EnqueueWriteBuffer(const Buffer& b,bool blocking_write,size_t offset,
+		size_t cb,const void* ptr,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueWriteBuffer(id,b.id,blocking_write,offset,cb,ptr,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Write buffer failed");
+
+		return e;
+	}
+	//EnqueueReadBufferRect
+	//EnqueueWriteBufferRect
+	Event EnqueueCopyBuffer(
+		const Buffer& src,const Buffer& dst,
+		size_t src_offset,size_t dst_offset,
+		size_t cb,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueCopyBuffer(id,src.id,dst.id,src_offset,dst_offset,cb,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Copy buffer failed");
+
+		return e;
+	}
+
+	//EnqueueCopyBufferRect
+	Event EnqueueMapBuffer(void**ptr,
+		const Buffer& b,bool blocking_map,
+		cl_map_flags map_flags,size_t offset,
+		size_t cb,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result;
+		void *nptr=clEnqueueMapBuffer(id,b.id,blocking_map,map_flags,offset,cb,waitlist.size(),&waitlist[0],&e,&result);
+		impl::check_result(result,CL_SUCCESS,"Mapping buffer failed");
+		*ptr=nptr;
+		return e;
+	}
+	
+	Event EnqueueUnmapBuffer(const Buffer& b,void* ptr,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueUnmapMemObject(id,b.id,ptr,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Unmapping the buffer failed");
+		return e;
+	}
+	
+	Event EnqueueNDRangeKernel(
+		const Kernel& k,
+		const std::initializer_list<size_t>& global_offset={},
+		const std::initializer_list<size_t>& global_size={},
+		const std::initializer_list<size_t>& local_size={},
+		const std::vector<Event>& prev=std::vector<Event>())
+	{
+		const size_t* gop= (global_offset.end()-global_offset.begin() == 0) ? NULL : global_offset.begin();
+		const size_t* lsp= (local_size.end()-local_size.begin() == 0) ? NULL : local_size.begin();
+		size_t nd=(global_size.end()-global_size.begin());
+		if(nd < 1 || nd > 3)
+		{
+			throw Exception(CL_INVALID_VALUE,"Error, invalid number of dimensions in kernel queue");
+		}
+		cl_int result;
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+
+		result=clEnqueueNDRangeKernel(id,k.id,nd,gop,global_size.begin(),lsp,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Error enqueuing the kernel");
+		return e;
+	}
+	Event EnqueueTask(const Kernel& k,const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueTask(id,k.id,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Error enqueuing the task");
+		return e;
+	}
+	Event EnqueueMarker()
+	{
+		cl_event e;
+		cl_int result=clEnqueueMarker(id,&e);
+		impl::check_result(result,CL_SUCCESS,"Error enqueuing marker");
+		return e;
+	}
+	void EnqueueWaitForEvents(const std::vector<Event>& prev)
+	{
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		cl_int result=clEnqueueWaitForEvents(id,waitlist.size(),&waitlist[0]);
+		impl::check_result(result,CL_SUCCESS,"Error enqueuing waitfor events");
+	}
+	void EnqueueBarrier()
+	{
+		cl_int result=clEnqueueBarrier(id);
+		impl::check_result(result,CL_SUCCESS,"Error enqueuing barrier");
+	}
+	
+	/*Event EnqueueNativeKernel(
+	cl_int
+clEnqueueNativeKernel
+(cl_command_queue
+command_queue
+, void (*
+user_func
+)(void *),
+void *
+args
+, size_t
+cb_args
+, cl_uint
+num_mem_objects
+,
+const cl_mem *
+mem_list
+, const void **
+args_mem_loc
+,
+cl_uint
+num_events_in_wait_list
+,
+const cl_event *
+event_wait_list
+, cl_event *
+event
+)*/
+};
+
+
+
+
+
 
 }
 

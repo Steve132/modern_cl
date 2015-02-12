@@ -244,6 +244,7 @@ public:
 
 		return std::vector<Device>(ids.cbegin(),ids.cend());
 	}
+
 };
 
 
@@ -587,7 +588,22 @@ public:
 			{	return	clGetProgramBuildInfo(id,dev.id,paramname,as,data,aso); }
 		);
 	}
-	std::vector<Kernel> CreateKernels();
+	std::vector<Kernel> CreateKernels()
+	{
+		cl_uint required;
+		cl_int result=clCreateKernelsInProgram(id,0,NULL,&required);
+		impl::check_result(result,CL_SUCCESS,"Create Kernels from program failed");
+		std::vector<cl_kernel> kernel_ids(required);
+		result=clCreateKernelsInProgram(id,required,&kernel_ids[0],NULL);
+		impl::check_result(result,CL_SUCCESS,"Create Kernels from program failed");
+		std::vector<Kernel> ks(kernel_ids.cbegin(),kernel_ids.cend());
+		return ks;
+	}
+	static void UnloadCompiler()
+	{
+		cl_int result=clUnloadCompiler();
+		impl::check_result(result,CL_SUCCESS,"Unloading the compiler failed");
+	}
 };
 
 
@@ -624,6 +640,9 @@ public:
 		id=clCreateKernel(p,name.c_str(),&result);
 		impl::check_result(result,CL_SUCCESS,"Error creating kernel object");
 	}
+	Kernel(const cl_kernel& kid):
+		impl::Object<Kernel>(kid)
+	{}
 	
 	//this works for all POD types..just a straightup memory copy
 	//template<class T,typename std::enable_if<std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value>::type* = nullptr>
@@ -960,34 +979,27 @@ public:
 		impl::check_result(result,CL_SUCCESS,"Error enqueuing barrier");
 	}
 	
-	/*Event EnqueueNativeKernel(
-	cl_int
-clEnqueueNativeKernel
-(cl_command_queue
-command_queue
-, void (*
-user_func
-)(void *),
-void *
-args
-, size_t
-cb_args
-, cl_uint
-num_mem_objects
-,
-const cl_mem *
-mem_list
-, const void **
-args_mem_loc
-,
-cl_uint
-num_events_in_wait_list
-,
-const cl_event *
-event_wait_list
-, cl_event *
-event
-)*/
+	//Event EnqueueNativeKernel
+	
+	Event EnqueueReadImage(const Image& im,bool blocking_read,
+			       const std::initializer_list<size_t>& origin,const std::initializer_list<size_t>& region,const std::initializer_list<size_t>& pitch,
+				void* ptr,
+				const std::vector<Event>& prev=std::vector<Event>())
+	{
+		cl_event e;
+		std::vector<cl_event> waitlist(prev.cbegin(),prev.cend());
+		size_t originarr[3]={0,0,0};
+		size_t regionarr[3]={0,0,0};
+		size_t pitcharr[3]={0,0,0};
+		
+		std::copy(origin.begin(),origin.end(),originarr);
+		std::copy(region.begin(),region.end(),regionarr);
+		std::copy(pitch.begin(),pitch.end(),pitcharr);
+
+		cl_int result=clEnqueueReadImage(id,im.id,blocking_read,originarr,regionarr,pitcharr[0],pitcharr[1],ptr,waitlist.size(),&waitlist[0],&e);
+		impl::check_result(result,CL_SUCCESS,"Error reading the image back");
+		return e;
+	}
 };
 
 

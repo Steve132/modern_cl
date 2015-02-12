@@ -12,13 +12,13 @@ struct SeperableConvolver
 	SeperableConvolver(bool use_gpu):
 		dev(cl::Platform::GetIDs()[0].GetDeviceIDs(use_gpu ? CL_DEVICE_TYPE_GPU :CL_DEVICE_TYPE_CPU)[0]),
 		ctx({dev}),
-		pgm({pgmsrc}),
+		pgm(ctx,{pgmsrc}),
 		conv3(pgm,"conv3"),
 		queue(ctx,dev)
 	{}
 };
 
-static const std::string SeperableConvolver::pgmsrc=R"CLSRC(
+const std::string SeperableConvolver::pgmsrc=R"CLSRC(
 #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
 const sampler_t reader_samp =
 CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_REPEAT | CLK_FILTER_NEAREST;
@@ -45,22 +45,22 @@ __kernel void conv3(__write_only image_3d_t dst,__read_only image_2d_t src,__con
 )CLSRC";
 
 void seperable_conv_3D_sep(const void* datain,void* dataout,
-	std::initializer_list<size_t> dims,unsigned int num_channels,const float* kernels,unsigned int kernel_length,bool use_gpu=true)
+	std::initializer_list<std::size_t> dims,unsigned int num_channels,const float* kernels,unsigned int kernel_length,bool use_gpu)
 {
 	static SeperableConvolver sc(use_gpu);
-	static const cl_image_channel_order channels[4]={CL_R,CL_RG,CL_RGB,CL_RGBA};
-	cl::Image src(sc.ctx,CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,{channels[num_channels],CL_FLOAT},dims,{0,0},datain);
+	static const cl_channel_order channels[4]={CL_R,CL_RG,CL_RGB,CL_RGBA};
+	cl::Image src(sc.ctx,CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,{channels[num_channels],CL_FLOAT},dims,{0,0},const_cast<void*>(datain));
 	cl::Image dst(sc.ctx,CL_MEM_READ_WRITE,{channels[num_channels],CL_FLOAT},dims);
-	cl::Buffer convkernel(sc.ctx,CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,3*kernel_length,kernels);
+	cl::Buffer convkernel(sc.ctx,CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,3*kernel_length,(void*)kernels);
 	
-	std::vector<Event> evs(1);
+	std::vector<cl::Event> evs(1);
 	cl::Image* srcp=&src;
 	cl::Image* dstp=&dst;
 
 	for(unsigned int i=0;i<3;i++)
 	{
-		sc.k1.setArgs(*dstp,*srcp,convkernel,kernel_length,i);
-		evs[i]=sc.queue.EnqueueNDRangeKernel(sc.k1,{},dims,{},evs);
+		sc.conv3.setArgs(*dstp,*srcp,convkernel,kernel_length,i);
+		evs[i]=sc.queue.EnqueueNDRangeKernel(sc.conv3,{},dims,{},evs);
 		std::swap(srcp,dstp);		
 	}
 	sc.queue.EnqueueReadImage(dst,true,{},dims,{},dataout,evs);

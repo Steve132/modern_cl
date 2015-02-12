@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_CXX_FLAGS "-std=c++11")
-add_library(clalt OpenCL.cpp OpenCL.hpp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_subdirectory(examples)

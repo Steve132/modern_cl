@@ -521,7 +521,7 @@ private:
 	}
 
 public:
-	Program(const Context& ctx,std::vector<std::string>& sources):
+	Program(const Context& ctx,const std::vector<std::string>& sources):
 		impl::Object<Program>(cl_program())
 	{
 		cl_int result;
@@ -535,7 +535,7 @@ public:
 		id=clCreateProgramWithSource(ctx,sources.size(),&ptrs[0],&lengths[0],&result);
 		impl::check_result(result,CL_SUCCESS,"Error creating program from source");
 	}
-	Program(const Context& ctx,const std::vector<Device>& devices,std::vector<std::vector<uint8_t> >& binaries):
+	Program(const Context& ctx,const std::vector<Device>& devices,const std::vector<std::vector<uint8_t> >& binaries):
 		impl::Object<Program>(cl_program())
 	{
 		if(devices.size() != binaries.size())
@@ -739,7 +739,7 @@ public:
 		id=clCreateUserEvent(ctx,&result);
 		impl::check_result(result,CL_SUCCESS,"Error creating user event");
 	}
-	Event(const cl_event& e):
+	Event(const cl_event& e=cl_event()):
 		impl::Object<Event>(e),
 		callback(&Event::callback_default)
 	{}

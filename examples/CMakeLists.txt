@@ -1,1 +1,4 @@
 add_subdirectory(clconv)
+
+add_executable(simple_cl_hello simple_cl_hello.cpp)
+target_link_libraries(simple_cl_hello OpenCL)

@@ -341,7 +341,7 @@ class Context: public impl::Object<Context>
 {
 public:
 	typedef std::function<void (const std::string&,const void*,size_t)> NotifyFunction;
-	static NotifyFunction default_notify;
+	static void default_notify(const std::string&,const void*,size_t) {}
 private:
 	NotifyFunction context_notify;
 	
